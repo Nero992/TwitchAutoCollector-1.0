@@ -85,7 +85,50 @@ settings.setUserAgentString(desktopUA);
 settings.setUserAgentString(desktopUA);
 
 
-        webView.setWebViewClient(new WebViewClient());
+        
+webView.setWebViewClient(new WebViewClient() {
+    @Override
+    public void onPageStarted(
+        WebView view, String url,
+        android.graphics.Bitmap favicon) {
+        status.setText("正在載入：" + url);
+    }
+
+    @Override
+    public void onPageFinished(
+        WebView view, String url) {
+        status.setText("網頁載入完成：" + url);
+    }
+
+    @Override
+    public void onReceivedError(
+        WebView view,
+        android.webkit.WebResourceRequest request,
+        android.webkit.WebResourceError error) {
+
+        if (request.isForMainFrame()) {
+            status.setText(
+                "載入錯誤：" +
+                error.getDescription()
+            );
+        }
+    }
+
+    @Override
+    public void onReceivedHttpError(
+        WebView view,
+        android.webkit.WebResourceRequest request,
+        android.webkit.WebResourceResponse response) {
+
+        if (request.isForMainFrame()) {
+            status.setText(
+                "HTTP 錯誤：" +
+                response.getStatusCode()
+            );
+        }
+    }
+});
+
         webView.setWebChromeClient(new WebChromeClient());
 
         layout.addView(status);
