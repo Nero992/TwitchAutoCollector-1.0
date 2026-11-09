@@ -74,7 +74,6 @@ settings.setDomStorageEnabled(true);
 settings.setUseWideViewPort(true);
 settings.setLoadWithOverviewMode(true);
         
-settings.setUserAgentString(desktopUA);
 
 
         
