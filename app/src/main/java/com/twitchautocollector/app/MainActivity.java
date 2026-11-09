@@ -129,7 +129,31 @@ webView.setWebViewClient(new WebViewClient() {
     }
 });
 
-        webView.setWebChromeClient(new WebChromeClient());
+        
+webView.setWebChromeClient(new WebChromeClient() {
+    @Override
+    public boolean onConsoleMessage(
+        android.webkit.ConsoleMessage message) {
+
+        if (message.messageLevel() ==
+                android.webkit.ConsoleMessage.MessageLevel.ERROR) {
+
+            android.util.Log.e(
+                "TwitchWebView",
+                message.sourceId() + ":" +
+                message.lineNumber() + " " +
+                message.message()
+            );
+
+            status.setText(
+                "JS 錯誤：" + message.message()
+            );
+        }
+
+        return true;
+    }
+});
+
 
         layout.addView(status);
         layout.addView(webView,
