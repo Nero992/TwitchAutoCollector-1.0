@@ -72,10 +72,15 @@ public class MainActivity extends Activity {
 settings.setUseWideViewPort(true);
 settings.setLoadWithOverviewMode(true);
 
-String desktopUA =
-    "Mozilla/5.0 (X11; Linux x86_64) " +
-    "AppleWebKit/537.36 (KHTML, like Gecko) " +
-    "Chrome/120.0.0.0 Safari/537.36";
+
+String originalUA = settings.getUserAgentString();
+
+String desktopUA = originalUA
+    .replace("; wv", "")
+    .replace("Mobile ", "");
+
+settings.setUserAgentString(desktopUA);
+
 
 settings.setUserAgentString(desktopUA);
 
