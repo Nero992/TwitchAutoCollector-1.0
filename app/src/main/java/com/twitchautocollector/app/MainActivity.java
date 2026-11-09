@@ -1,69 +1,20 @@
+
 package com.twitchautocollector.app;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.os.Handler;
-import android.webkit.WebChromeClient;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import android.webkit.WebSettings;
+import android.content.Intent;
+import android.net.Uri;
+import android.provider.Settings;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.view.ViewGroup;
+import android.view.Gravity;
 
 public class MainActivity extends Activity {
 
-    private WebView webView;
     private TextView status;
-    private final Handler handler = new Handler();
-    private int attempts = 0;
-
-    private final String collectorScript =
-        "(function() {" +
-        "const selectors = [" +
-        "'button[aria-label*=\"Claim\"]'," +
-        "'button[aria-label*=\"領取\"]'," +
-        "'[data-test-selector=\"claimable-bonus__icon\"]'" +
-        "];" +
-        "for (const selector of selectors) {" +
-        " const el = document.querySelector(selector);" +
-        " if (el) {" +
-        "  const btn = el.closest('button') || el;" +
-        "  btn.click();" +
-        "  return 'clicked';" +
-        " }" +
-        "}" +
-        "return 'none';" +
-        "})();";
-
-    private final Runnable scanner = new Runnable() {
-        @Override
-        public void run() {
-            if (webView != null) {
-                webView.evaluateJavascript(
-                    collectorScript,
-                    result -> {
-                        
-if ("\"clicked\"".equals(result)) {
-    attempts++;
-    status.setText(
-        "偵測到寶箱，已嘗試點擊：" + attempts
-    );
-} else if ("\"none\"".equals(result)) {
-    status.setText(
-        "掃描正常，但沒有找到寶箱按鈕"
-    );
-} else {
-    status.setText(
-        "掃描回傳：" + result
-    );
-}
-
-                    }
-                );
-                handler.postDelayed(this, 5000);
-            }
-        }
-    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,108 +22,58 @@ if ("\"clicked\"".equals(result)) {
 
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(32, 48, 32, 32);
+        layout.setGravity(Gravity.CENTER_HORIZONTAL);
+
+        TextView title = new TextView(this);
+        title.setText("Twitch Auto Collector v2.0");
+        title.setTextSize(23);
+        layout.addView(title);
 
         status = new TextView(this);
-        status.setText("Twitch Auto Collector 已啟動");
-        status.setPadding(16, 16, 16, 16);
-
-        webView = new WebView(this);
-        WebSettings settings = webView.getSettings();
-        
-settings.setJavaScriptEnabled(true);
-settings.setDomStorageEnabled(true);
-settings.setUseWideViewPort(true);
-settings.setLoadWithOverviewMode(true);
-        
-
-
-        
-webView.setWebViewClient(new WebViewClient() {
-    @Override
-    public void onPageStarted(
-        WebView view, String url,
-        android.graphics.Bitmap favicon) {
-        status.setText("正在載入：" + url);
-    }
-
-    @Override
-    public void onPageFinished(
-        WebView view, String url) {
-        status.setText("網頁載入完成：" + url);
-    }
-
-    @Override
-    public void onReceivedError(
-        WebView view,
-        android.webkit.WebResourceRequest request,
-        android.webkit.WebResourceError error) {
-
-        if (request.isForMainFrame()) {
-            status.setText(
-                "載入錯誤：" +
-                error.getDescription()
-            );
-        }
-    }
-
-    @Override
-    public void onReceivedHttpError(
-        WebView view,
-        android.webkit.WebResourceRequest request,
-        android.webkit.WebResourceResponse response) {
-
-        if (request.isForMainFrame()) {
-            status.setText(
-                "HTTP 錯誤：" +
-                response.getStatusCode()
-            );
-        }
-    }
-});
-
-        
-webView.setWebChromeClient(new WebChromeClient() {
-    @Override
-    public boolean onConsoleMessage(
-        android.webkit.ConsoleMessage message) {
-
-        if (message.messageLevel() ==
-                android.webkit.ConsoleMessage.MessageLevel.ERROR) {
-
-            android.util.Log.e(
-                "TwitchWebView",
-                message.sourceId() + ":" +
-                message.lineNumber() + " " +
-                message.message()
-            );
-
-            status.setText(
-                "JS 錯誤：" + message.message()
-            );
-        }
-
-        return true;
-    }
-});
-
-
-        layout.addView(status);
-        layout.addView(webView,
-            new LinearLayout.LayoutParams(
-                -1, 0, 1
-            )
+        status.setText(
+            "Chrome 寶箱偵測版\n\n" +
+            "請先啟用無障礙服務。"
         );
+        status.setTextSize(17);
+        status.setPadding(0, 30, 0, 30);
+        layout.addView(status);
+
+        Button settingsButton = new Button(this);
+        settingsButton.setText("開啟無障礙設定");
+        layout.addView(settingsButton,
+            new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        settingsButton.setOnClickListener(v -> {
+            Intent intent = new Intent(
+                Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            startActivity(intent);
+        });
+
+        Button chromeButton = new Button(this);
+        chromeButton.setText("開啟 Chrome Twitch");
+        layout.addView(chromeButton,
+            new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        chromeButton.setOnClickListener(v -> {
+            Intent intent = new Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://www.twitch.tv/")
+            );
+            intent.setPackage("com.android.chrome");
+
+            try {
+                startActivity(intent);
+            } catch (Exception e) {
+                status.setText(
+                    "無法開啟 Chrome：" + e.getMessage());
+            }
+        });
 
         setContentView(layout);
-        webView.loadUrl("https://www.twitch.tv");
-
-        handler.postDelayed(scanner, 5000);
-    }
-
-    @Override
-    protected void onDestroy() {
-        handler.removeCallbacks(scanner);
-        webView.destroy();
-        super.onDestroy();
     }
 }
