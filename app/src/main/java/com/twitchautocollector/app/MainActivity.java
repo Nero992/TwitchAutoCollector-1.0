@@ -69,19 +69,11 @@ public class MainActivity extends Activity {
         webView = new WebView(this);
         WebSettings settings = webView.getSettings();
         
+settings.setJavaScriptEnabled(true);
+settings.setDomStorageEnabled(true);
 settings.setUseWideViewPort(true);
 settings.setLoadWithOverviewMode(true);
-
-
-String originalUA = settings.getUserAgentString();
-
-String desktopUA = originalUA
-    .replace("; wv", "")
-    .replace("Mobile ", "");
-
-settings.setUserAgentString(desktopUA);
-
-
+        
 settings.setUserAgentString(desktopUA);
 
 
