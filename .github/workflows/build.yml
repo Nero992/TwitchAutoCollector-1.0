@@ -25,10 +25,15 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Install Android SDK 35
+      - name: Install Android SDK
         run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)
+          fi
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build Debug APK
         run: gradle assembleDebug --no-daemon
@@ -38,3 +43,4 @@ jobs:
         with:
           name: TwitchAutoCollector-APK
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
