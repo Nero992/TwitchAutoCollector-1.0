@@ -12,7 +12,6 @@ public class TwitchAccessibilityService
         extends AccessibilityService {
 
     private static final String TAG = "TwitchCollector";
-    private static final String TWITCH_PACKAGE = "tv.twitch.android.app";
 
     private static final long SCAN_INTERVAL = 1500;
     private static final long CLICK_COOLDOWN = 10000;
@@ -33,10 +32,14 @@ public class TwitchAccessibilityService
 
         CharSequence packageName = event.getPackageName();
 
-        if (packageName == null ||
-                !TWITCH_PACKAGE.contentEquals(packageName)) {
-            return;
-        }
+        if (packageName == null) return;
+
+String pkg = packageName.toString();
+
+if (!pkg.equals("tv.twitch.android.app")
+        && !pkg.equals("com.android.chrome")) {
+    return;
+}
 
         long now = System.currentTimeMillis();
 
