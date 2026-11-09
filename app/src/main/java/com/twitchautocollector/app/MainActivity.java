@@ -68,8 +68,17 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
+        
+settings.setUseWideViewPort(true);
+settings.setLoadWithOverviewMode(true);
+
+String desktopUA =
+    "Mozilla/5.0 (X11; Linux x86_64) " +
+    "AppleWebKit/537.36 (KHTML, like Gecko) " +
+    "Chrome/120.0.0.0 Safari/537.36";
+
+settings.setUserAgentString(desktopUA);
+
 
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
