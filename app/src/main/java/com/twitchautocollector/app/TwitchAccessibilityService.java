@@ -2,9 +2,12 @@
 package com.twitchautocollector.app;
 
 import android.accessibilityservice.AccessibilityService;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
+import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
-import android.util.Log;
 
 import java.util.Locale;
 
@@ -12,94 +15,101 @@ public class TwitchAccessibilityService
         extends AccessibilityService {
 
     private static final String TAG = "TwitchCollector";
+    private static final String CHROME = "com.android.chrome";
 
-    private static final long SCAN_INTERVAL = 1500;
-    private static final long CLICK_COOLDOWN = 10000;
+    private static final long SCAN_MS = 2000;
+    private static final long COOLDOWN_MS = 15000;
 
-    private long lastScan = 0;
+    private final Handler handler =
+            new Handler(Looper.getMainLooper());
+
+    private boolean running = false;
     private long lastClick = 0;
-    private int clickAttempts = 0;
+    private int attempts = 0;
+
+    private final Runnable scanner = new Runnable() {
+        @Override
+        public void run() {
+            if (!running) return;
+
+            try {
+                scanChrome();
+            } catch (Exception e) {
+                Log.e(TAG, "Scan error", e);
+            }
+
+            handler.postDelayed(this, SCAN_MS);
+        }
+    };
 
     @Override
-    public void onServiceConnected() {
+    protected void onServiceConnected() {
         super.onServiceConnected();
-        Log.i(TAG, "Twitch accessibility service started");
+
+        running = true;
+        handler.removeCallbacks(scanner);
+        handler.post(scanner);
+
+        Log.i(TAG, "Chrome collector started");
     }
 
     @Override
-    public void onAccessibilityEvent(AccessibilityEvent event) {
-        if (event == null) return;
+    public void onAccessibilityEvent(
+            AccessibilityEvent event) {
+        // Periodic scanner handles detection.
+    }
 
-        CharSequence packageName = event.getPackageName();
+    private void scanChrome() {
+        AccessibilityNodeInfo root =
+                getRootInActiveWindow();
 
-        if (packageName == null) return;
-
-String pkg = packageName.toString();
-
-if (!pkg.equals("tv.twitch.android.app")
-        && !pkg.equals("com.android.chrome")) {
-    return;
-}
-
-        long now = System.currentTimeMillis();
-
-        if (now - lastScan < SCAN_INTERVAL) return;
-        lastScan = now;
-
-        AccessibilityNodeInfo root = getRootInActiveWindow();
-
-        if (root == null) {
-            Log.d(TAG, "No accessible root");
-            return;
-        }
+        if (root == null) return;
 
         try {
-            if (now - lastClick < CLICK_COOLDOWN) {
+            CharSequence pkg = root.getPackageName();
+
+            if (pkg == null ||
+                    !CHROME.contentEquals(pkg)) {
                 return;
             }
 
-            boolean clicked = scanForChest(root, 0);
+            long now = SystemClock.uptimeMillis();
+
+            if (now - lastClick < COOLDOWN_MS) {
+                return;
+            }
+
+            if (!containsTwitch(root, 0)) {
+                Log.d(TAG, "Twitch URL not found");
+                return;
+            }
+
+            boolean clicked = findAndClick(root, 0);
 
             if (clicked) {
-                lastClick = System.currentTimeMillis();
-                clickAttempts++;
+                lastClick = SystemClock.uptimeMillis();
+                attempts++;
 
-                Log.i(TAG, "Chest click attempted. Total: "
-                        + clickAttempts);
+                Log.i(TAG,
+                        "Click attempted: " + attempts);
             } else {
-                Log.d(TAG, "No accessible chest found");
+                Log.d(TAG,
+                        "No accessible claim button");
             }
         } finally {
             root.recycle();
         }
     }
 
-    private boolean scanForChest(
+    private boolean containsTwitch(
             AccessibilityNodeInfo node, int depth) {
 
-        if (node == null || depth > 40) return false;
+        if (node == null || depth > 50) {
+            return false;
+        }
 
-        String text = getNodeText(node);
-
-        if (isChestButton(text)) {
-            Log.i(TAG, "Possible chest: " + text);
-
-            AccessibilityNodeInfo target = node;
-
-            for (int i = 0; i < 4 && target != null; i++) {
-                if (target.isClickable()
-                        && target.isEnabled()
-                        && target.isVisibleToUser()) {
-
-                    boolean result = target.performAction(
-                            AccessibilityNodeInfo.ACTION_CLICK);
-
-                    Log.i(TAG, "Click result: " + result);
-                    return result;
-                }
-
-                target = target.getParent();
-            }
+        if (getText(node).contains("twitch.tv")) {
+            return true;
         }
 
         for (int i = 0; i < node.getChildCount(); i++) {
@@ -107,7 +117,7 @@ if (!pkg.equals("tv.twitch.android.app")
 
             if (child != null) {
                 try {
-                    if (scanForChest(child, depth + 1)) {
+                    if (containsTwitch(child, depth + 1)) {
                         return true;
                     }
                 } finally {
@@ -119,18 +129,65 @@ if (!pkg.equals("tv.twitch.android.app")
         return false;
     }
 
-    private boolean isChestButton(String text) {
-        if (text.isEmpty()) return false;
+    private boolean findAndClick(
+            AccessibilityNodeInfo node, int depth) {
 
+        if (node == null || depth > 50) {
+            return false;
+        }
+
+        String value = getText(node);
+
+        if (isClaimButton(value)) {
+            Log.i(TAG, "Candidate: " + value);
+
+            AccessibilityNodeInfo target = node;
+
+            for (int i = 0; i < 4 && target != null; i++) {
+
+                if (target.isClickable()
+                        && target.isEnabled()
+                        && target.isVisibleToUser()) {
+
+                    boolean clicked =
+                            target.performAction(
+                                    AccessibilityNodeInfo.ACTION_CLICK);
+
+                    if (clicked) return true;
+                }
+
+                target = target.getParent();
+            }
+        }
+
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+
+            if (child != null) {
+                try {
+                    if (findAndClick(child, depth + 1)) {
+                        return true;
+                    }
+                } finally {
+                    child.recycle();
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private boolean isClaimButton(String text) {
         return text.contains("claim bonus")
                 || text.contains("claim points")
                 || text.contains("bonus chest")
+                || text.contains("claim reward")
                 || text.contains("領取獎勵")
                 || text.contains("領取點數")
                 || text.contains("領取紅利");
     }
 
-    private String getNodeText(AccessibilityNodeInfo node) {
+    private String getText(AccessibilityNodeInfo node) {
         StringBuilder sb = new StringBuilder();
 
         if (node.getText() != null) {
@@ -150,6 +207,13 @@ if (!pkg.equals("tv.twitch.android.app")
 
     @Override
     public void onInterrupt() {
-        Log.d(TAG, "Service interrupted");
+        Log.w(TAG, "Service interrupted");
+    }
+
+    @Override
+    public void onDestroy() {
+        running = false;
+        handler.removeCallbacks(scanner);
+        super.onDestroy();
     }
 }
