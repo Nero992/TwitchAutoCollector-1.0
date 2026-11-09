@@ -12,86 +12,119 @@ public class TwitchAccessibilityService
         extends AccessibilityService {
 
     private static final String TAG = "TwitchCollector";
+    private static final String TWITCH_PACKAGE = "tv.twitch.android.app";
+
+    private static final long SCAN_INTERVAL = 1500;
+    private static final long CLICK_COOLDOWN = 10000;
+
     private long lastScan = 0;
+    private long lastClick = 0;
+    private int clickAttempts = 0;
 
     @Override
-    public void onAccessibilityEvent(
-            AccessibilityEvent event) {
+    public void onServiceConnected() {
+        super.onServiceConnected();
+        Log.i(TAG, "Twitch accessibility service started");
+    }
 
+    @Override
+    public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null) return;
 
+        CharSequence packageName = event.getPackageName();
+
+        if (packageName == null ||
+                !TWITCH_PACKAGE.contentEquals(packageName)) {
+            return;
+        }
+
         long now = System.currentTimeMillis();
-        if (now - lastScan < 3000) return;
+
+        if (now - lastScan < SCAN_INTERVAL) return;
         lastScan = now;
 
-        AccessibilityNodeInfo root =
-                getRootInActiveWindow();
+        AccessibilityNodeInfo root = getRootInActiveWindow();
 
         if (root == null) {
-            Log.d(TAG, "No accessible window");
+            Log.d(TAG, "No accessible root");
             return;
         }
 
         try {
-            if (!isTwitchPage(root, 0)) {
-                Log.d(TAG, "Twitch page not confirmed");
+            if (now - lastClick < CLICK_COOLDOWN) {
                 return;
             }
 
-            boolean found = findChest(root, 0);
+            boolean clicked = scanForChest(root, 0);
 
-            if (found) {
-                Log.i(TAG, "Possible chest detected");
+            if (clicked) {
+                lastClick = System.currentTimeMillis();
+                clickAttempts++;
+
+                Log.i(TAG, "Chest click attempted. Total: "
+                        + clickAttempts);
             } else {
-                Log.d(TAG, "No chest found");
+                Log.d(TAG, "No accessible chest found");
             }
         } finally {
             root.recycle();
         }
     }
 
-    private boolean isTwitchPage(
+    private boolean scanForChest(
             AccessibilityNodeInfo node, int depth) {
 
-        if (node == null || depth > 30) return false;
+        if (node == null || depth > 40) return false;
 
-        String value = getNodeText(node);
+        String text = getNodeText(node);
 
-        if (value.contains("twitch.tv")) {
-            return true;
+        if (isChestButton(text)) {
+            Log.i(TAG, "Possible chest: " + text);
+
+            AccessibilityNodeInfo target = node;
+
+            for (int i = 0; i < 4 && target != null; i++) {
+                if (target.isClickable()
+                        && target.isEnabled()
+                        && target.isVisibleToUser()) {
+
+                    boolean result = target.performAction(
+                            AccessibilityNodeInfo.ACTION_CLICK);
+
+                    Log.i(TAG, "Click result: " + result);
+                    return result;
+                }
+
+                target = target.getParent();
+            }
         }
 
         for (int i = 0; i < node.getChildCount(); i++) {
-            if (isTwitchPage(node.getChild(i), depth + 1)) {
-                return true;
+            AccessibilityNodeInfo child = node.getChild(i);
+
+            if (child != null) {
+                try {
+                    if (scanForChest(child, depth + 1)) {
+                        return true;
+                    }
+                } finally {
+                    child.recycle();
+                }
             }
         }
 
         return false;
     }
 
-    private boolean findChest(
-            AccessibilityNodeInfo node, int depth) {
+    private boolean isChestButton(String text) {
+        if (text.isEmpty()) return false;
 
-        if (node == null || depth > 30) return false;
-
-        String value = getNodeText(node);
-
-        if (value.contains("claim bonus")
-                || value.contains("claim points")
-                || value.contains("領取獎勵")
-                || value.contains("領取點數")
-                || value.contains("bonus chest")) {
-            return true;
-        }
-
-        for (int i = 0; i < node.getChildCount(); i++) {
-            if (findChest(node.getChild(i), depth + 1)) {
-                return true;
-            }
-        }
-
-        return false;
+        return text.contains("claim bonus")
+                || text.contains("claim points")
+                || text.contains("bonus chest")
+                || text.contains("領取獎勵")
+                || text.contains("領取點數")
+                || text.contains("領取紅利");
     }
 
     private String getNodeText(AccessibilityNodeInfo node) {
@@ -102,7 +135,11 @@ public class TwitchAccessibilityService
         }
 
         if (node.getContentDescription() != null) {
-            sb.append(node.getContentDescription());
+            sb.append(node.getContentDescription()).append(" ");
+        }
+
+        if (node.getViewIdResourceName() != null) {
+            sb.append(node.getViewIdResourceName());
         }
 
         return sb.toString().toLowerCase(Locale.ROOT);
