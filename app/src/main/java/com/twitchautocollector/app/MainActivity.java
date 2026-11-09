@@ -42,12 +42,22 @@ public class MainActivity extends Activity {
                 webView.evaluateJavascript(
                     collectorScript,
                     result -> {
-                        if ("\"clicked\"".equals(result)) {
-                            attempts++;
-                            status.setText(
-                                "領取點擊次數：" + attempts
-                            );
-                        }
+                        
+if ("\"clicked\"".equals(result)) {
+    attempts++;
+    status.setText(
+        "偵測到寶箱，已嘗試點擊：" + attempts
+    );
+} else if ("\"none\"".equals(result)) {
+    status.setText(
+        "掃描正常，但沒有找到寶箱按鈕"
+    );
+} else {
+    status.setText(
+        "掃描回傳：" + result
+    );
+}
+
                     }
                 );
                 handler.postDelayed(this, 5000);
